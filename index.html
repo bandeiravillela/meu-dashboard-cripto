@@ -297,8 +297,26 @@
                 pricesData = await robustFetch(url);
                 updateUI();
             } catch (error) {
-                console.error("Failed to fetch prices:", error);
-                showNotification('error', 'Erro de Rede', 'Não foi possível buscar os preços atuais.');
+                console.warn("API Principal (CoinGecko) falhou. A tentar a API de emergência (CoinCap).", error);
+                try {
+                    const coinIds = [...new Set(portfolio.map(tx => tx.id).concat(alerts.map(a => a.coinId)))];
+                    if (coinIds.length === 0) return;
+                    const url = `https://api.coincap.io/v2/assets?ids=${coinIds.join(',')}`;
+                    const fallbackData = await robustFetch(url);
+                    
+                    pricesData = {};
+                    fallbackData.data.forEach(asset => {
+                        pricesData[asset.id] = {
+                            usd: parseFloat(asset.priceUsd),
+                            usd_24h_change: parseFloat(asset.changePercent24Hr)
+                        };
+                    });
+                    updateUI();
+                    showNotification('success', 'Aviso', 'A usar fonte de dados de emergência para os preços.', true);
+                } catch (fallbackError) {
+                    console.error("Ambas as APIs de preço falharam:", fallbackError);
+                    showNotification('error', 'Erro de Rede Crítico', 'Não foi possível buscar os preços atuais de nenhuma fonte.');
+                }
             }
         }
 
@@ -1067,7 +1085,7 @@
             document.getElementById('generate-pdf-btn').addEventListener('click', generatePDFReport);
         }
 
-        async function handleAddTransaction(e) {
+        function handleAddTransaction(e) {
             e.preventDefault();
             const submitButton = document.getElementById('add-tx-btn');
             submitButton.disabled = true;
@@ -1080,33 +1098,37 @@
                 const priceString = document.getElementById('price').value;
                 const price = parseFloat(priceString.replace(/,/g, ''));
                 const date = document.getElementById('date').value;
-                const usdToBrlRate = await fetchExchangeRate(date); 
-                let id = userInput;
-                let name = userInput.charAt(0).toUpperCase() + userInput.slice(1);
-                const mappedCoin = Object.values(coinSymbolMap).find(c => c.id === userInput) || coinSymbolMap[userInput];
-                if (mappedCoin) {
-                    id = mappedCoin.id;
-                    name = mappedCoin.name;
-                }
-                if (id && quantity > 0 && price > 0 && date && usdToBrlRate && usdToBrlRate > 0) {
-                    if (type === 'sell') {
-                        const { currentHoldings } = calculateHoldingsAndPL();
-                        const assetHolding = currentHoldings[id] ? currentHoldings[id].quantity : 0;
-                        if (quantity > assetHolding + 1e-9) { 
-                            showNotification('error', 'Erro de Validação', `Saldo insuficiente. Você possui apenas ${assetHolding.toFixed(6)} de ${name}.`); 
-                            return; 
-                        }
+                
+                fetchExchangeRate(date).then(usdToBrlRate => {
+                    let id = userInput;
+                    let name = userInput.charAt(0).toUpperCase() + userInput.slice(1);
+                    const mappedCoin = Object.values(coinSymbolMap).find(c => c.id === userInput) || coinSymbolMap[userInput];
+                    if (mappedCoin) {
+                        id = mappedCoin.id;
+                        name = mappedCoin.name;
                     }
-                    const newTransaction = { txId: `tx_${Date.now()}`, type, id, name, quantity, price, date, usdToBrlRate };
-                    portfolio.push(newTransaction);
-                    saveState();
-                    fetchPrices();
-                    document.getElementById('add-transaction-form').reset();
-                    document.getElementById('date').value = new Date().toISOString().split('T')[0];
-                    showNotification('success', 'Sucesso!', 'Transação adicionada.', true);
-                } else {
-                    showNotification('error', 'Erro', 'Verifique os campos ou a data. Não foi possível obter a cotação do dólar.');
-                }
+
+                    if (id && quantity > 0 && price > 0 && date && usdToBrlRate && usdToBrlRate > 0) {
+                        if (type === 'sell') {
+                            const { currentHoldings } = calculateHoldingsAndPL();
+                            const assetHolding = currentHoldings[id] ? currentHoldings[id].quantity : 0;
+                            if (quantity > assetHolding + 1e-9) { 
+                                showNotification('error', 'Erro de Validação', `Saldo insuficiente. Você possui apenas ${assetHolding.toFixed(6)} de ${name}.`); 
+                                return; 
+                            }
+                        }
+                        const newTransaction = { txId: `tx_${Date.now()}`, type, id, name, quantity, price, date, usdToBrlRate };
+                        portfolio.push(newTransaction);
+                        saveState();
+                        fetchPrices();
+                        document.getElementById('add-transaction-form').reset();
+                        document.getElementById('date').value = new Date().toISOString().split('T')[0];
+                        showNotification('success', 'Sucesso!', 'Transação adicionada.', true);
+                    } else {
+                        showNotification('error', 'Erro', 'Verifique os campos ou a data. Não foi possível obter a cotação do dólar.');
+                    }
+                });
+
             } catch (error) {
                 console.error("Erro ao adicionar transação:", error);
                 showNotification('error', 'Erro', 'Ocorreu um problema ao adicionar a transação.');
@@ -1123,7 +1145,7 @@
             fetchPrices();
         }
         
-        async function handleAddAlert(e) {
+        function handleAddAlert(e) {
             e.preventDefault();
             const coinId = document.getElementById('alert-coin-select').value;
             const condition = document.getElementById('alert-condition').value;
@@ -1147,7 +1169,7 @@
             renderActiveAlerts();
         }
 
-        async function updateAlertInFirestore(alert) {
+        function updateAlertInFirestore(alert) {
             alert.isTriggered = true;
             saveState();
         }
@@ -1192,5 +1214,3 @@
 </body>
 </html>
 
-
- 
