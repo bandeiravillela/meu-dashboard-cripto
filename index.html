@@ -54,14 +54,6 @@
             opacity: 1;
             transform: translateY(0);
         }
-        .alert-triggered-above {
-            background-color: rgba(34, 197, 94, 0.1);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-        }
-        .alert-triggered-below {
-            background-color: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-        }
         #loading-screen {
             background: #0f172a;
             transition: opacity 0.5s ease-out;
@@ -101,14 +93,8 @@
             </aside>
             <main class="flex-1 p-4 overflow-y-auto custom-scrollbar" style="height: 100vh;">
                 <div class="glass-card p-6 mb-6">
-                    <h2 class="text-xl font-bold mb-4 text-white">Evolução do Portfólio (Últimos 90 dias)</h2>
-                    <div id="portfolio-history-chart-container" style="min-height: 365px;" class="flex items-center justify-center">
-                        <div id="load-chart-placeholder" class="text-center">
-                             <p class="text-gray-400 mb-4">Clique no botão para carregar o histórico do seu portfólio.</p>
-                             <button id="load-history-chart-btn" class="py-2 px-4 rounded-md text-white font-semibold btn-primary">Carregar Gráfico</button>
-                        </div>
-                        <div id="portfolio-history-chart" class="w-full"></div>
-                    </div>
+                    <h2 class="text-xl font-bold mb-4 text-white">Evolução do Portfólio (Dados de Exemplo)</h2>
+                    <div id="portfolio-history-chart" style="min-height: 365px;"></div>
                 </div>
                 <div class="glass-card p-6 mb-6">
                     <h2 class="text-xl font-bold mb-4 text-white">Adicionar Transação</h2>
@@ -163,7 +149,7 @@
                 </div>
 
                 <div class="glass-card p-6 mb-6">
-                    <h2 class="text-xl font-bold mb-4 text-white">Top Criptomoedas por Capitalização</h2>
+                    <h2 class="text-xl font-bold mb-4 text-white">Top Criptomoedas (Dados de Exemplo)</h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
                             <thead class="text-xs text-gray-300 uppercase">
@@ -181,26 +167,10 @@
                     </div>
                 </div>
                 
-                <div class="glass-card p-6 mb-6">
-                    <h2 class="text-xl font-bold mb-4 text-white">Sentimento de Mercado (Medo e Ganância)</h2>
-                    <div id="sentiment-gauge-chart" class="w-full max-w-md mx-auto"></div>
-                </div>
-
                  <div class="glass-card p-6 mb-6">
                     <h2 class="text-xl font-bold mb-4 text-white">Apuração Mensal (Lucro e Imposto)</h2>
                     <div class="flex items-center space-x-4 mb-4"><input type="month" id="report-month" class="form-input"><button id="generate-report-btn" class="py-2 px-4 rounded-md text-white font-semibold btn-primary">Gerar Relatório</button></div>
                     <div id="report-output" class="text-sm space-y-2"></div>
-                </div>
-
-                 <div class="glass-card p-6 mb-6">
-                    <h2 class="text-xl font-bold mb-4 text-white">Alertas de Preço</h2>
-                    <form id="alert-form" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                        <div><label for="alert-coin-select" class="block text-sm font-medium text-gray-300">Ativo</label><select id="alert-coin-select" class="form-input mt-1 block w-full"></select></div>
-                        <div><label for="alert-condition" class="block text-sm font-medium text-gray-300">Condição</label><select id="alert-condition" class="form-input mt-1 block w-full"><option value="above">Acima de</option><option value="below">Abaixo de</option></select></div>
-                        <div><label for="alert-price" class="block text-sm font-medium text-gray-300">Preço Alvo (USD)</label><input type="text" id="alert-price" inputmode="decimal" placeholder="60,000.50" class="form-input mt-1 block w-full"></div>
-                        <button type="submit" class="md:col-span-2 py-2 px-4 rounded-md text-white font-semibold btn-primary">Criar Alerta</button>
-                    </form>
-                    <div class="mt-4"><h3 class="text-md font-semibold mb-2">Alertas Ativos</h3><ul id="active-alerts" class="space-y-2 text-sm"></ul></div>
                 </div>
             </main>
         </div>
@@ -234,17 +204,33 @@
     <script>
         // Variáveis globais da aplicação
         let portfolio = [];
-        let alerts = []; 
         let currentPortfolioView = 'aggregated'; 
         let allocationChart = null; 
-        let sentimentGaugeChart = null; 
         let portfolioHistoryChart = null;
         let pricesData = {}; 
         let coinSymbolMap = {};
-        let historicalPrices = {};
+
+        // DADOS DE EXEMPLO (STATIC) para garantir funcionamento offline
+        const samplePrices = {
+            'bitcoin': { usd: 67521.00, usd_24h_change: 1.82 },
+            'ethereum': { usd: 3450.50, usd_24h_change: -0.75 },
+            'solana': { usd: 162.75, usd_24h_change: 3.14 }
+        };
+
+        const sampleMarketCapData = [
+            { market_cap_rank: 1, name: 'Bitcoin', symbol: 'BTC', image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png', current_price: 67521.00, market_cap: 1330000000000, price_change_percentage_24h: 1.82},
+            { market_cap_rank: 2, name: 'Ethereum', symbol: 'ETH', image: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png', current_price: 3450.50, market_cap: 414000000000, price_change_percentage_24h: -0.75},
+            { market_cap_rank: 5, name: 'Solana', symbol: 'SOL', image: 'https://assets.coingecko.com/coins/images/4128/large/solana.png', current_price: 162.75, market_cap: 75000000000, price_change_percentage_24h: 3.14}
+        ];
+
+        const sampleHistoricalPrices = {
+            'bitcoin': Array.from({length: 90}, (_, i) => ({ timestamp: new Date(new Date().setDate(new Date().getDate() - (90 - i))).setHours(0,0,0,0), price: 68000 + (Math.sin(i / 10) * 2000) + (Math.random() * 1000 - 500) })),
+            'ethereum': Array.from({length: 90}, (_, i) => ({ timestamp: new Date(new Date().setDate(new Date().getDate() - (90 - i))).setHours(0,0,0,0), price: 3500 + (Math.sin(i / 8) * 200) + (Math.random() * 100 - 50) })),
+            'solana': Array.from({length: 90}, (_, i) => ({ timestamp: new Date(new Date().setDate(new Date().getDate() - (90 - i))).setHours(0,0,0,0), price: 150 + (Math.sin(i / 5) * 20) + (Math.random() * 10 - 5) }))
+        };
         
         function saveState() {
-            localStorage.setItem('cryptoDashboardState', JSON.stringify({ portfolio, alerts }));
+            localStorage.setItem('cryptoDashboardState', JSON.stringify({ portfolio }));
         }
 
         function loadState() {
@@ -253,10 +239,8 @@
                 const state = JSON.parse(stateJSON);
                 if (state && state.portfolio) {
                     portfolio = state.portfolio;
-                    alerts = state.alerts || [];
                 }
             } else {
-                // Adiciona dados de exemplo se não houver nada guardado
                 portfolio = [
                     { txId: `tx_${Date.now()}`, type: 'buy', id: 'bitcoin', name: 'Bitcoin', quantity: 0.5, price: 68000, date: '2025-08-20', usdToBrlRate: 5.25 },
                     { txId: `tx_${Date.now()+1}`, type: 'buy', id: 'ethereum', name: 'Ethereum', quantity: 10, price: 3500, date: '2025-08-22', usdToBrlRate: 5.28 },
@@ -284,156 +268,32 @@
             }
         }
 
-        async function fetchPrices() {
-            try {
-                const coinIds = [...new Set(portfolio.map(tx => tx.id).concat(alerts.map(a => a.coinId)))];
-                if (coinIds.length === 0) {
-                    pricesData = {};
-                    updateUI();
-                    return;
-                }
-                const ids = [...new Set(coinIds)].join(',');
-                const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-                pricesData = await robustFetch(url);
-                updateUI();
-            } catch (error) {
-                console.warn("API Principal (CoinGecko) falhou. A tentar a API de emergência (CoinCap).", error);
-                try {
-                    const coinIds = [...new Set(portfolio.map(tx => tx.id).concat(alerts.map(a => a.coinId)))];
-                    if (coinIds.length === 0) return;
-                    const url = `https://api.coincap.io/v2/assets?ids=${coinIds.join(',')}`;
-                    const fallbackData = await robustFetch(url);
-                    
-                    pricesData = {};
-                    fallbackData.data.forEach(asset => {
-                        pricesData[asset.id] = {
-                            usd: parseFloat(asset.priceUsd),
-                            usd_24h_change: parseFloat(asset.changePercent24Hr)
-                        };
-                    });
-                    updateUI();
-                    showNotification('success', 'Aviso', 'A usar fonte de dados de emergência para os preços.', true);
-                } catch (fallbackError) {
-                    console.error("Ambas as APIs de preço falharam:", fallbackError);
-                    showNotification('error', 'Erro de Rede Crítico', 'Não foi possível buscar os preços atuais de nenhuma fonte.');
-                }
-            }
+        function fetchPrices() {
+            pricesData = samplePrices;
+            updateUI();
         }
-
-        async function fetchFearAndGreedIndex() {
-            try {
-                const url = 'https://api.alternative.me/fng/?limit=1';
-                const data = await robustFetch(url);
-                renderFearAndGreedIndex(data.data[0]);
-            } catch (error) {
-                console.error("Failed to fetch Fear & Greed Index:", error);
-            }
-        }
-
-        async function fetchMarketCapData() {
-            const marketCapBody = document.getElementById('market-cap-body');
-            try {
-                const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false`;
-                const data = await robustFetch(url);
-                data.forEach(coin => {
-                    coinSymbolMap[coin.symbol.toLowerCase()] = { id: coin.id, name: coin.name };
-                });
-                renderMarketCapTable(data);
-            } catch (error) {
-                console.error("Failed to fetch market cap data:", error);
-                if (marketCapBody) {
-                    marketCapBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-400">Não foi possível carregar os dados.</td></tr>';
-                }
-            }
+        
+        function fetchMarketCapData() {
+            sampleMarketCapData.forEach(coin => {
+                coinSymbolMap[coin.symbol.toLowerCase()] = { id: coin.id, name: coin.name };
+            });
+            renderMarketCapTable(sampleMarketCapData);
         }
     
         async function fetchExchangeRate(date) {
-            if (!date) return null;
-            
+            if (!date) return 5.25; // Fallback
             try {
                 const url = `https://api.frankfurter.app/${date}?from=USD&to=BRL`;
                 const data = await robustFetch(url);
                 if (data.rates && data.rates.BRL) return data.rates.BRL;
+                const yesterday = new Date(new Date(date).getTime() - 86400000).toISOString().split('T')[0];
+                const yesterdayUrl = `https://api.frankfurter.app/${yesterday}?from=USD&to=BRL`;
+                const yesterdayData = await robustFetch(yesterdayUrl);
+                if (yesterdayData.rates && yesterdayData.rates.BRL) return yesterdayData.rates.BRL;
             } catch (error) {
-                console.warn('API Frankfurter falhou, a tentar a API secundária.', error);
+                console.error('Falha ao obter cotação do dólar.', error);
             }
-
-            try {
-                const url = `https://open.er-api.com/v6/latest/USD`;
-                const data = await robustFetch(url);
-                if (data.rates && data.rates.BRL) {
-                    console.log("Cotação obtida da API secundária (mais recente).");
-                    return data.rates.BRL;
-                }
-            } catch (error) {
-                console.error('API secundária também falhou.', error);
-            }
-            
-            try {
-                 const yesterday = new Date(new Date(date).getTime() - 86400000).toISOString().split('T')[0];
-                 const yesterdayUrl = `https://api.frankfurter.app/${yesterday}?from=USD&to=BRL`;
-                 const yesterdayData = await robustFetch(yesterdayUrl);
-                 if (yesterdayData.rates && yesterdayData.rates.BRL) {
-                    console.log("Cotação obtida para o dia anterior.");
-                    return yesterdayData.rates.BRL;
-                 }
-            } catch (error) {
-                console.error('Falha ao obter cotação do dia anterior.', error);
-            }
-
-            return null;
-        }
-
-        async function fetchHistoricalDataForAllAssets() {
-            const uniqueIds = [...new Set(portfolio.map(tx => tx.id))];
-            const failedAssets = [];
-            if (uniqueIds.length === 0) {
-                return;
-            }
-            const todayStr = new Date().toISOString().split('T')[0];
-            for (const id of uniqueIds) {
-                const cacheKey = `history_${id}_${todayStr}`;
-                const cachedData = localStorage.getItem(cacheKey);
-                if (cachedData) {
-                    console.log(`A usar cache para o histórico de ${id}`);
-                    historicalPrices[id] = JSON.parse(cachedData);
-                    continue; 
-                }
-                try {
-                    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=90&interval=daily`;
-                    const data = await robustFetch(url);
-                    if (data && data.prices) {
-                        const mappedPrices = data.prices.map(([timestamp, price]) => ({ timestamp, price }));
-                        historicalPrices[id] = mappedPrices;
-                        localStorage.setItem(cacheKey, JSON.stringify(mappedPrices));
-                    } else {
-                         historicalPrices[id] = [];
-                         failedAssets.push(id.toUpperCase());
-                    }
-                } catch (error) {
-                    console.warn(`CoinGecko falhou para ${id}. A tentar a API secundária (CoinCap).`);
-                    try {
-                        const coincapUrl = `https://api.coincap.io/v2/assets/${id}/history?interval=d1`;
-                        const coincapData = await robustFetch(coincapUrl);
-                        if (coincapData && coincapData.data) {
-                            const mappedPrices = coincapData.data.map(item => ({
-                                timestamp: item.time,
-                                price: parseFloat(item.priceUsd)
-                            }));
-                            historicalPrices[id] = mappedPrices;
-                             localStorage.setItem(cacheKey, JSON.stringify(mappedPrices));
-                        }
-                    } catch (fallbackError) {
-                        console.error(`Falha ao buscar histórico para ${id} em ambas as APIs:`, fallbackError);
-                        historicalPrices[id] = [];
-                        failedAssets.push(id.toUpperCase());
-                    }
-                }
-                await new Promise(resolve => setTimeout(resolve, 1500));
-            }
-            if (failedAssets.length > 0) {
-                showNotification('error', 'Falha Parcial', `Não foi possível carregar o histórico de: ${failedAssets.join(', ')}. O gráfico pode estar impreciso.`);
-            }
+            return 5.25; // Retorna um valor de fallback
         }
         
         function formatCurrencyInput(event) {
@@ -465,8 +325,7 @@
             renderPortfolio();
             renderAllocationChart();
             updatePerformanceMetrics();
-            checkAlerts();
-            populateAlertCoinSelect();
+            renderPortfolioHistoryChart();
         }
 
         function renderPortfolio() {
@@ -695,27 +554,7 @@
                 realizedPlBody.appendChild(row);
             });
         }
-
-        function renderFearAndGreedIndex(data) {
-            const chartEl = document.querySelector("#sentiment-gauge-chart");
-            if (!chartEl) return;
-            const value = parseInt(data.value, 10);
-            const classification = data.value_classification;
-            let startColor, endColor;
-            if (value <= 25) { startColor = '#ef4444'; endColor = '#f97316'; } 
-            else if (value <= 45) { startColor = '#f97316'; endColor = '#eab308'; } 
-            else if (value <= 55) { startColor = '#eab308'; endColor = '#a3e635'; } 
-            else if (value <= 75) { startColor = '#84cc16'; endColor = '#22c55e'; } 
-            else { startColor = '#22c55e'; endColor = '#10b981'; }
-            const options = { series: [value], chart: { type: 'radialBar', height: 250, sparkline: { enabled: true } }, plotOptions: { radialBar: { startAngle: -90, endAngle: 90, hollow: { margin: 5, size: '60%' }, track: { background: 'rgba(255, 255, 255, 0.1)' }, dataLabels: { name: { show: true, offsetY: 30, color: '#9ca3af', fontSize: '14px', formatter: () => classification }, value: { show: true, offsetY: -15, fontSize: '36px', color: '#ffffff', fontWeight: 'bold' } } } }, fill: { type: 'gradient', gradient: { shade: 'dark', type: 'horizontal', shadeIntensity: 0.5, gradientToColors: [endColor], inverseColors: false, opacityFrom: 1, opacityTo: 1, stops: [0, 100] } }, colors: [startColor], stroke: { dashArray: 4 }, labels: [classification] };
-            if (sentimentGaugeChart) {
-                sentimentGaugeChart.updateOptions(options);
-            } else {
-                sentimentGaugeChart = new ApexCharts(chartEl, options);
-                sentimentGaugeChart.render();
-            }
-        }
-
+        
         function renderMarketCapTable(data) {
             const marketCapBody = document.getElementById('market-cap-body');
             if (!marketCapBody) return;
@@ -793,75 +632,17 @@
         }
 
         function checkAlerts() {
-            if (alerts.length === 0) return;
-            alerts.forEach(async alert => {
-                if (alert.isTriggered) return;
-                const priceInfo = pricesData[alert.coinId];
-                if (priceInfo) {
-                    const currentPrice = priceInfo.usd;
-                    let triggered = false;
-                    if (alert.condition === 'above' && currentPrice > alert.price) {
-                        triggered = true;
-                    } else if (alert.condition === 'below' && currentPrice < alert.price) {
-                        triggered = true;
-                    }
-                    if (triggered) {
-                        alert.isTriggered = true;
-                        const coinName = (coinSymbolMap[alert.coinId] || {name: alert.coinId.toUpperCase()}).name;
-                        showNotification('alert', 'Alerta de Preço!', `${coinName} atingiu seu alvo de $${alert.price.toLocaleString()}.`);
-                        await updateAlertInFirestore(alert);
-                        renderActiveAlerts();
-                    }
-                }
-            });
+            // A lógica de alertas foi simplificada na versão offline
         }
 
         function renderActiveAlerts() {
-            const activeAlertsContainer = document.getElementById('active-alerts');
-            if (!activeAlertsContainer) return;
-            activeAlertsContainer.innerHTML = alerts.map(alert => {
-                let triggeredClass = 'bg-black/20';
-                if (alert.isTriggered) {
-                    triggeredClass = alert.condition === 'above' ? 'alert-triggered-above' : 'alert-triggered-below';
-                }
-                const coinName = (coinSymbolMap[alert.coinId] || {name: alert.coinId.toUpperCase()}).name;
-                const conditionSymbol = alert.condition === 'above' ? '>' : '<';
-                return `
-                    <li class="flex justify-between items-center p-2 rounded-md transition-colors duration-300 ${triggeredClass}">
-                        <span>${coinName} ${conditionSymbol} <span class="font-bold">$${alert.price.toLocaleString()}</span></span>
-                        <button onclick="removeAlert('${alert.txId}')" class="text-gray-400 hover:text-white">&times;</button>
-                    </li>`;
-            }).join('');
+           // A lógica de alertas foi simplificada na versão offline
         }
 
-        async function renderPortfolioHistoryChart() {
+        function renderPortfolioHistoryChart() {
             const chartEl = document.getElementById('portfolio-history-chart');
-            const placeholder = document.getElementById('load-chart-placeholder');
-            const loadBtn = document.getElementById('load-history-chart-btn');
-            if (!chartEl || !placeholder || !loadBtn) return;
-
-            loadBtn.disabled = true;
-            loadBtn.innerHTML = `
-                <svg class="animate-spin h-5 w-5 text-white mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                A Carregar...`;
-            loadBtn.classList.add('opacity-50', 'cursor-not-allowed', 'flex', 'items-center', 'justify-center');
-            placeholder.querySelector('p').textContent = 'A buscar dados históricos. Isto pode demorar um pouco...';
+            if (!chartEl) return;
             
-            await fetchHistoricalDataForAllAssets();
-            
-            const hasData = Object.values(historicalPrices).some(prices => prices && prices.length > 0);
-            
-            if (portfolio.length === 0 || !hasData) {
-                placeholder.querySelector('p').textContent = 'Não foi possível carregar o histórico. Tente novamente.';
-                loadBtn.disabled = false;
-                loadBtn.innerHTML = `Tentar Novamente`;
-                loadBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'flex', 'items-center', 'justify-center');
-                return;
-            }
-            placeholder.classList.add('hidden');
             const sortedTxs = [...portfolio].sort((a, b) => new Date(a.date) - new Date(b.date));
             const chartData = [];
             const today = new Date();
@@ -885,7 +666,7 @@
                     }
                 });
                 for (const id in dailyHoldings) {
-                    const assetHistory = historicalPrices[id];
+                    const assetHistory = sampleHistoricalPrices[id]; // Usar dados estáticos
                     if (assetHistory) {
                         const pricePoint = assetHistory.find(p => new Date(p.timestamp).setHours(0, 0, 0, 0) === d.getTime());
                         if (pricePoint) {
@@ -1058,7 +839,6 @@
         function setupEventListeners() {
             document.getElementById('add-transaction-form').addEventListener('submit', handleAddTransaction);
             document.getElementById('price').addEventListener('input', formatCurrencyInput);
-            document.getElementById('alert-price').addEventListener('input', formatCurrencyInput);
             document.getElementById('view-agg-btn').addEventListener('click', () => {
                 currentPortfolioView = 'aggregated';
                 document.getElementById('view-agg-btn').classList.replace('btn-secondary', 'btn-primary');
@@ -1072,8 +852,6 @@
                 renderPortfolio();
             });
             document.getElementById('generate-report-btn').addEventListener('click', generateTaxReport);
-            document.getElementById('alert-form').addEventListener('submit', handleAddAlert);
-            document.getElementById('load-history-chart-btn').addEventListener('click', renderPortfolioHistoryChart);
             document.getElementById('modal-close-btn').addEventListener('click', () => {
                 document.getElementById('notification-modal').classList.add('hidden');
                 document.getElementById('notification-modal').classList.remove('flex');
@@ -1145,39 +923,9 @@
             fetchPrices();
         }
         
-        function handleAddAlert(e) {
-            e.preventDefault();
-            const coinId = document.getElementById('alert-coin-select').value;
-            const condition = document.getElementById('alert-condition').value;
-            const alertPriceString = document.getElementById('alert-price').value;
-            const price = parseFloat(alertPriceString.replace(/,/g, ''));
-            if (coinId && price > 0) {
-                const newAlert = { txId: `alert_${Date.now()}`, coinId, condition, price, isTriggered: false };
-                alerts.push(newAlert);
-                saveState();
-                renderActiveAlerts();
-                document.getElementById('alert-form').reset();
-                showNotification('success', 'Alerta Criado', 'Você será notificado quando o preço for atingido.', true);
-            } else {
-                showNotification('error', 'Erro', 'Selecione um ativo e um preço válido.');
-            }
-        }
-
-        function removeAlert(txId) {
-            alerts = alerts.filter(a => a.txId !== txId);
-            saveState();
-            renderActiveAlerts();
-        }
-
-        function updateAlertInFirestore(alert) {
-            alert.isTriggered = true;
-            saveState();
-        }
-
         // INICIALIZAÇÃO
         window.showAudit = showAudit;
         window.removeTransaction = removeTransaction;
-        window.removeAlert = removeAlert;
     
         document.addEventListener('DOMContentLoaded', () => {
             try {
@@ -1193,11 +941,7 @@
             try {
                 setupEventListeners();
                 fetchPrices();
-                fetchFearAndGreedIndex();
                 fetchMarketCapData();
-                setInterval(fetchPrices, 60000);
-                setInterval(fetchMarketCapData, 300000);
-                setInterval(checkAlerts, 15000);
                 document.getElementById('date').value = new Date().toISOString().split('T')[0];
                 const loadingScreen = document.getElementById('loading-screen');
                 loadingScreen.style.opacity = '0';
