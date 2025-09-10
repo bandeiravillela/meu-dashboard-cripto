@@ -76,7 +76,7 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <p class="text-lg text-white">A inicializar e a ligar à nuvem...</p>
+            <p class="text-lg text-white">A carregar o dashboard...</p>
         </div>
     </div>
 
@@ -97,10 +97,6 @@
                          <div class="flex justify-between"><span>Pior Ativo:</span> <span id="worst-asset" class="font-semibold">-</span></div>
                          <div class="flex justify-between"><span>Volatilidade (24h):</span> <span id="portfolio-volatility" class="font-semibold">-</span></div>
                     </div>
-                </div>
-                <div class="p-4 rounded-lg bg-black/20 text-xs text-center text-gray-400">
-                    <p>ID de Utilizador:</p>
-                    <p id="user-id-display" class="break-all"></p>
                 </div>
             </aside>
             <main class="flex-1 p-4 overflow-y-auto custom-scrollbar" style="height: 100vh;">
@@ -235,12 +231,7 @@
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col items-end space-y-2"></div>
 
 
-    <script type="module">
-        // Importações do Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
+    <script>
         // Variáveis globais da aplicação
         let portfolio = [];
         let alerts = []; 
@@ -252,16 +243,29 @@
         let coinSymbolMap = {};
         let historicalPrices = {};
         
-        // Variáveis do Firebase
-        let db;
-        let auth;
-        let userId;
-        let unsubscribePortfolio;
-        let unsubscribeAlerts;
+        function saveState() {
+            localStorage.setItem('cryptoDashboardState', JSON.stringify({ portfolio, alerts }));
+        }
 
-        // Configuração do Firebase (fornecida pelo ambiente)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        function loadState() {
+            const stateJSON = localStorage.getItem('cryptoDashboardState');
+            if (stateJSON) {
+                const state = JSON.parse(stateJSON);
+                if (state && state.portfolio) {
+                    portfolio = state.portfolio;
+                    alerts = state.alerts || [];
+                }
+            } else {
+                // Adiciona dados de exemplo se não houver nada guardado
+                portfolio = [
+                    { txId: `tx_${Date.now()}`, type: 'buy', id: 'bitcoin', name: 'Bitcoin', quantity: 0.5, price: 68000, date: '2025-08-20', usdToBrlRate: 5.25 },
+                    { txId: `tx_${Date.now()+1}`, type: 'buy', id: 'ethereum', name: 'Ethereum', quantity: 10, price: 3500, date: '2025-08-22', usdToBrlRate: 5.28 },
+                    { txId: `tx_${Date.now()+2}`, type: 'buy', id: 'solana', name: 'Solana', quantity: 50, price: 150, date: '2025-08-25', usdToBrlRate: 5.30 },
+                    { txId: `tx_${Date.now()+3}`, type: 'sell', id: 'solana', name: 'Solana', quantity: 20, price: 180, date: '2025-08-26', usdToBrlRate: 5.31 }
+                ];
+                saveState();
+            }
+        }
 
         async function robustFetch(url, options = {}, retries = 5, delay = 1000) {
             for (let i = 0; i < retries; i++) {
@@ -511,7 +515,7 @@
                     <td class="px-6 py-4">${formattedDate}</td>
                     <td class="px-6 py-4">R$ ${tx.usdToBrlRate ? tx.usdToBrlRate.toFixed(4) : 'N/A'}</td>
                     <td class="px-6 py-4">
-                        <button class="text-red-400 hover:text-red-300 font-semibold" onclick="removeTransaction('${tx.docId}')">Remover</button>
+                        <button class="text-red-400 hover:text-red-300 font-semibold" onclick="removeTransaction('${tx.txId}')">Remover</button>
                     </td>`;
                 body.appendChild(row);
             });
@@ -807,7 +811,7 @@
                 return `
                     <li class="flex justify-between items-center p-2 rounded-md transition-colors duration-300 ${triggeredClass}">
                         <span>${coinName} ${conditionSymbol} <span class="font-bold">$${alert.price.toLocaleString()}</span></span>
-                        <button onclick="removeAlert('${alert.docId}')" class="text-gray-400 hover:text-white">&times;</button>
+                        <button onclick="removeAlert('${alert.txId}')" class="text-gray-400 hover:text-white">&times;</button>
                     </li>`;
             }).join('');
         }
@@ -817,6 +821,7 @@
             const placeholder = document.getElementById('load-chart-placeholder');
             const loadBtn = document.getElementById('load-history-chart-btn');
             if (!chartEl || !placeholder || !loadBtn) return;
+
             loadBtn.disabled = true;
             loadBtn.innerHTML = `
                 <svg class="animate-spin h-5 w-5 text-white mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1092,17 +1097,19 @@
                             return; 
                         }
                     }
-                    const newTransaction = { type, id, name, quantity, price, date, usdToBrlRate, userId };
-                    await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/portfolio`), newTransaction);
+                    const newTransaction = { txId: `tx_${Date.now()}`, type, id, name, quantity, price, date, usdToBrlRate };
+                    portfolio.push(newTransaction);
+                    saveState();
+                    fetchPrices();
                     document.getElementById('add-transaction-form').reset();
                     document.getElementById('date').value = new Date().toISOString().split('T')[0];
-                    showNotification('success', 'Sucesso!', 'Transação adicionada à nuvem.', true);
+                    showNotification('success', 'Sucesso!', 'Transação adicionada.', true);
                 } else {
                     showNotification('error', 'Erro', 'Verifique os campos ou a data. Não foi possível obter a cotação do dólar.');
                 }
             } catch (error) {
                 console.error("Erro ao adicionar transação:", error);
-                showNotification('error', 'Erro de Base de Dados', 'Não foi possível guardar a transação.');
+                showNotification('error', 'Erro', 'Ocorreu um problema ao adicionar a transação.');
             } finally {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Adicionar';
@@ -1110,9 +1117,10 @@
             }
         }
 
-        async function removeTransaction(docId) {
-            if (!docId) return;
-            await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/portfolio`, docId));
+        function removeTransaction(txId) {
+            portfolio = portfolio.filter(tx => tx.txId !== txId);
+            saveState();
+            fetchPrices();
         }
         
         async function handleAddAlert(e) {
@@ -1122,44 +1130,26 @@
             const alertPriceString = document.getElementById('alert-price').value;
             const price = parseFloat(alertPriceString.replace(/,/g, ''));
             if (coinId && price > 0) {
-                const newAlert = { coinId, condition, price, isTriggered: false, userId };
-                await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/alerts`), newAlert);
+                const newAlert = { txId: `alert_${Date.now()}`, coinId, condition, price, isTriggered: false };
+                alerts.push(newAlert);
+                saveState();
+                renderActiveAlerts();
                 document.getElementById('alert-form').reset();
-                showNotification('success', 'Alerta Criado', 'Guardado na nuvem.', true);
+                showNotification('success', 'Alerta Criado', 'Você será notificado quando o preço for atingido.', true);
             } else {
                 showNotification('error', 'Erro', 'Selecione um ativo e um preço válido.');
             }
         }
 
-        async function removeAlert(docId) {
-            if (!docId) return;
-            await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/alerts`, docId));
+        function removeAlert(txId) {
+            alerts = alerts.filter(a => a.txId !== txId);
+            saveState();
+            renderActiveAlerts();
         }
 
         async function updateAlertInFirestore(alert) {
-            const alertRef = doc(db, `/artifacts/${appId}/users/${userId}/alerts`, alert.docId);
-            await setDoc(alertRef, { isTriggered: true }, { merge: true });
-        }
-
-        async function seedInitialData() {
-            console.log("Utilizador novo ou sem dados. A adicionar dados de exemplo à nuvem...");
-            const samplePortfolio = [
-                { type: 'buy', id: 'bitcoin', name: 'Bitcoin', quantity: 0.5, price: 68000, date: '2025-08-20', usdToBrlRate: 5.25 },
-                { type: 'buy', id: 'ethereum', name: 'Ethereum', quantity: 10, price: 3500, date: '2025-08-22', usdToBrlRate: 5.28 },
-                { type: 'buy', id: 'solana', name: 'Solana', quantity: 50, price: 150, date: '2025-08-25', usdToBrlRate: 5.30 },
-                { type: 'sell', id: 'solana', name: 'Solana', quantity: 20, price: 180, date: '2025-08-26', usdToBrlRate: 5.31 }
-            ];
-            const portfolioCollection = collection(db, `/artifacts/${appId}/users/${userId}/portfolio`);
-            for (const tx of samplePortfolio) {
-                const txWithUser = { ...tx, userId };
-                await addDoc(portfolioCollection, txWithUser);
-            }
-            showNotification('success', 'Bem-vindo!', 'Adicionámos alguns dados de exemplo para começar.', true);
-        }
-
-        async function refreshCoinGeckoData() {
-            await fetchPrices();
-            await fetchMarketCapData();
+            alert.isTriggered = true;
+            saveState();
         }
 
         // INICIALIZAÇÃO
@@ -1167,65 +1157,22 @@
         window.removeTransaction = removeTransaction;
         window.removeAlert = removeAlert;
     
-        document.addEventListener('DOMContentLoaded', async () => {
+        document.addEventListener('DOMContentLoaded', () => {
             try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                onAuthStateChanged(auth, user => {
-                    if (user) {
-                        userId = user.uid;
-                        document.getElementById('user-id-display').textContent = userId;
-                        listenToDataChanges();
-                        initializeAppUI();
-                    }
-                });
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                loadState();
+                initializeAppUI();
             } catch (error) {
-                console.error("Falha na autenticação ou inicialização:", error);
-                document.getElementById('loading-screen').innerHTML = '<p class="text-red-400">Falha crítica na inicialização. Por favor, recarregue a página.</p>';
+                console.error("Erro fatal ao inicializar a aplicação:", error);
+                document.body.innerHTML = `<div class="fixed inset-0 bg-slate-900 flex items-center justify-center text-center p-8"><p class="text-red-400 text-lg">Ocorreu um erro fatal ao carregar o dashboard.<br>Por favor, recarregue a página.<br><br><span class="text-sm text-gray-500">Detalhe: ${error.message}</span></p></div>`;
             }
         });
-        
-        let portfolioDebounceTimer;
-        function listenToDataChanges() {
-            if (unsubscribePortfolio) unsubscribePortfolio();
-            const portfolioCollection = collection(db, `/artifacts/${appId}/users/${userId}/portfolio`);
-            let isFirstPortfolioSnapshot = true;
-            unsubscribePortfolio = onSnapshot(portfolioCollection, (snapshot) => {
-                clearTimeout(portfolioDebounceTimer);
-                portfolioDebounceTimer = setTimeout(async () => {
-                    try {
-                        const isNewUser = snapshot.empty && isFirstPortfolioSnapshot;
-                        isFirstPortfolioSnapshot = false;
-                        if (isNewUser) {
-                            await seedInitialData();
-                            return; 
-                        }
-                        portfolio = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-                        await refreshCoinGeckoData();
-                    } catch (error) {
-                        console.error("Erro crítico ao processar dados do Firestore:", error);
-                        showNotification('error', 'Erro Crítico', 'Falha ao processar dados da nuvem.');
-                    }
-                }, 500);
-            });
-            if (unsubscribeAlerts) unsubscribeAlerts();
-            const alertsCollection = collection(db, `/artifacts/${appId}/users/${userId}/alerts`);
-            unsubscribeAlerts = onSnapshot(alertsCollection, (snapshot) => {
-                alerts = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-                renderActiveAlerts();
-            });
-        }
         
         function initializeAppUI() {
             try {
                 setupEventListeners();
+                fetchPrices();
                 fetchFearAndGreedIndex();
+                fetchMarketCapData();
                 setInterval(fetchPrices, 60000);
                 setInterval(fetchMarketCapData, 300000);
                 setInterval(checkAlerts, 15000);
@@ -1245,3 +1192,5 @@
 </body>
 </html>
 
+
+ 
