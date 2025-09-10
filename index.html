@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Criptoativos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to bottom right, #0f172a, #1e293b);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+        .form-input {
+            background-color: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem; color: white;
+            transition: all 0.2s ease-in-out;
+        }
+        .form-input:focus {
+            outline: none; border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+        }
+        .btn-primary {
+            background-color: #4f46e5; transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover { background-color: #6366f1; transform: translateY(-2px); }
+        .btn-secondary { background-color: rgba(255, 255, 255, 0.1); transition: background-color 0.3s; }
+        .btn-secondary:hover { background-color: rgba(255, 255, 255, 0.2); }
+        .toast {
+            opacity: 0;
+            transition: opacity 0.5s, transform 0.5s;
+            transform: translateY(20px);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .alert-triggered-above {
+            background-color: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+        }
+        .alert-triggered-below {
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        #loading-screen {
+            background: #0f172a;
+            transition: opacity 0.5s ease-out;
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="loading-screen" class="fixed inset-0 flex items-center justify-center z-50">
+        <div class="text-center">
+            <svg class="animate-spin h-8 w-8 text-white mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-lg text-white">A inicializar e a ligar à nuvem...</p>
+        </div>
+    </div>
+
+    <div id="main-content" class="hidden">
+        <div class="min-h-screen flex">
+            <aside class="w-80 bg-slate-900/70 glass-card m-4 p-6 flex flex-col space-y-6">
+                <h1 class="text-2xl font-bold text-white text-center">Crypto Dashboard</h1>
+                <div class="p-4 rounded-lg bg-black/20 flex-grow">
+                    <h3 class="font-semibold text-lg mb-3 text-white">Painel de Gestão</h3>
+                    <div class="mb-6">
+                        <h4 class="font-medium text-md mb-2 text-indigo-300">Alocação de Ativos</h4>
+                        <div id="allocation-chart"></div>
+                    </div>
+                    <div class="space-y-3 text-sm">
+                         <h4 class="font-medium text-md mb-2 text-indigo-300">Desempenho e Risco</h4>
+                         <div class="flex justify-between"><span>Resultado Total:</span> <span id="total-pl" class="font-semibold">-</span></div>
+                         <div class="flex justify-between"><span>Melhor Ativo:</span> <span id="best-asset" class="font-semibold">-</span></div>
+                         <div class="flex justify-between"><span>Pior Ativo:</span> <span id="worst-asset" class="font-semibold">-</span></div>
+                         <div class="flex justify-between"><span>Volatilidade (24h):</span> <span id="portfolio-volatility" class="font-semibold">-</span></div>
+                    </div>
+                </div>
+                <div class="p-4 rounded-lg bg-black/20 text-xs text-center text-gray-400">
+                    <p>ID de Utilizador:</p>
+                    <p id="user-id-display" class="break-all"></p>
+                </div>
+            </aside>
+            <main class="flex-1 p-4 overflow-y-auto custom-scrollbar" style="height: 100vh;">
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Evolução do Portfólio (Últimos 90 dias)</h2>
+                    <div id="portfolio-history-chart-container" style="min-height: 365px;" class="flex items-center justify-center">
+                        <div id="load-chart-placeholder" class="text-center">
+                             <p class="text-gray-400 mb-4">Clique no botão para carregar o histórico do seu portfólio.</p>
+                             <button id="load-history-chart-btn" class="py-2 px-4 rounded-md text-white font-semibold btn-primary">Carregar Gráfico</button>
+                        </div>
+                        <div id="portfolio-history-chart" class="w-full"></div>
+                    </div>
+                </div>
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Adicionar Transação</h2>
+                    <form id="add-transaction-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
+                        <div class="w-full"><label for="transaction-type" class="block text-sm font-medium text-gray-300">Tipo</label><select id="transaction-type" class="form-input mt-1 block w-full py-2 px-3"><option value="buy">Compra</option><option value="sell">Venda</option></select></div>
+                        <div class="w-full"><label for="coin-id" class="block text-sm font-medium text-gray-300">Ativo (ID ou Símbolo)</label><input type="text" id="coin-id" placeholder="ex: bitcoin ou btc" class="form-input mt-1 block w-full py-2 px-3"></div>
+                        <div class="w-full"><label for="quantity" class="block text-sm font-medium text-gray-300">Quantidade</label><input type="number" id="quantity" step="any" placeholder="0.5" class="form-input mt-1 block w-full py-2 px-3"></div>
+                        <div class="w-full"><label for="price" class="block text-sm font-medium text-gray-300">Preço (USD)</label><input type="text" id="price" inputmode="decimal" placeholder="50,000" class="form-input mt-1 block w-full py-2 px-3"></div>
+                        <div class="w-full"><label for="date" class="block text-sm font-medium text-gray-300">Data</label><input type="date" id="date" class="form-input mt-1 block w-full py-2 px-3"></div>
+                        <button type="submit" id="add-tx-btn" class="w-full py-2 px-4 rounded-md text-white font-semibold btn-primary">Adicionar</button>
+                    </form>
+                </div>
+                <div class="glass-card p-6 mb-6">
+                     <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-white">Meu Portfólio (Posições Abertas)</h2>
+                        <div>
+                            <button id="view-agg-btn" class="px-3 py-1 text-sm rounded-md btn-primary">Agregada</button>
+                            <button id="view-det-btn" class="px-3 py-1 text-sm rounded-md btn-secondary">Detalhada</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-xs text-gray-300 uppercase"><tr id="portfolio-header"></tr></thead><tbody id="portfolio-body"></tbody></table></div>
+                </div>
+
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Gerar Relatório PDF de Operações</h2>
+                    <div class="flex items-end space-x-4">
+                        <div>
+                            <label for="pdf-start-date" class="block text-sm font-medium text-gray-300">Data Inicial</label>
+                            <input type="date" id="pdf-start-date" class="form-input mt-1 block w-full">
+                        </div>
+                        <div>
+                            <label for="pdf-end-date" class="block text-sm font-medium text-gray-300">Data Final</label>
+                            <input type="date" id="pdf-end-date" class="form-input mt-1 block w-full">
+                        </div>
+                        <button id="generate-pdf-btn" class="py-2 px-4 rounded-md text-white font-semibold btn-primary">Gerar PDF</button>
+                    </div>
+                </div>
+                
+                 <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Resultados Realizados (Posições Fechadas)</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-300 uppercase">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">Ativo</th>
+                                    <th scope="col" class="px-6 py-3">Resultado Total ($)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="realized-pl-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Top Criptomoedas por Capitalização</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-300 uppercase">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">#</th>
+                                    <th scope="col" class="px-6 py-3">Ativo</th>
+                                    <th scope="col" class="px-6 py-3">Preço</th>
+                                    <th scope="col" class="px-6 py-3">Capitalização</th>
+                                    <th scope="col" class="px-6 py-3">Variação (24h)</th>
+                                    <th scope="col" class="px-6 py-3 text-center">Gráfico</th>
+                                </tr>
+                            </thead>
+                            <tbody id="market-cap-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Sentimento de Mercado (Medo e Ganância)</h2>
+                    <div id="sentiment-gauge-chart" class="w-full max-w-md mx-auto"></div>
+                </div>
+
+                 <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Apuração Mensal (Lucro e Imposto)</h2>
+                    <div class="flex items-center space-x-4 mb-4"><input type="month" id="report-month" class="form-input"><button id="generate-report-btn" class="py-2 px-4 rounded-md text-white font-semibold btn-primary">Gerar Relatório</button></div>
+                    <div id="report-output" class="text-sm space-y-2"></div>
+                </div>
+
+                 <div class="glass-card p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-white">Alertas de Preço</h2>
+                    <form id="alert-form" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                        <div><label for="alert-coin-select" class="block text-sm font-medium text-gray-300">Ativo</label><select id="alert-coin-select" class="form-input mt-1 block w-full"></select></div>
+                        <div><label for="alert-condition" class="block text-sm font-medium text-gray-300">Condição</label><select id="alert-condition" class="form-input mt-1 block w-full"><option value="above">Acima de</option><option value="below">Abaixo de</option></select></div>
+                        <div><label for="alert-price" class="block text-sm font-medium text-gray-300">Preço Alvo (USD)</label><input type="text" id="alert-price" inputmode="decimal" placeholder="60,000.50" class="form-input mt-1 block w-full"></div>
+                        <button type="submit" class="md:col-span-2 py-2 px-4 rounded-md text-white font-semibold btn-primary">Criar Alerta</button>
+                    </form>
+                    <div class="mt-4"><h3 class="text-md font-semibold mb-2">Alertas Ativos</h3><ul id="active-alerts" class="space-y-2 text-sm"></ul></div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Modal para Notificações -->
+    <div id="notification-modal" class="fixed inset-0 modal-overlay items-center justify-center hidden z-50">
+        <div class="glass-card p-6 max-w-sm w-full text-center">
+            <div id="modal-icon" class="mx-auto mb-4"></div>
+            <h3 id="modal-title" class="text-lg font-bold text-white mb-2"></h3>
+            <p id="modal-message" class="text-sm text-gray-300 mb-6"></p>
+            <button id="modal-close-btn" class="py-2 px-6 rounded-md text-white font-semibold btn-primary">OK</button>
+        </div>
+    </div>
+    
+    <!-- Modal para Auditoria -->
+     <div id="audit-modal" class="fixed inset-0 modal-overlay items-center justify-center hidden z-50">
+        <div class="glass-card p-6 max-w-2xl w-full text-left flex flex-col" style="max-height: 90vh;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="audit-modal-title" class="text-xl font-bold text-white"></h3>
+                <button id="audit-modal-close-btn" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="audit-modal-content" class="text-sm text-gray-300 mb-6 custom-scrollbar overflow-y-auto"></div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col items-end space-y-2"></div>
+
+
+    <script type="module">
+        // Importações do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variáveis globais da aplicação
+        let portfolio = [];
+        let alerts = []; 
+        let currentPortfolioView = 'aggregated'; 
+        let allocationChart = null; 
+        let sentimentGaugeChart = null; 
+        let portfolioHistoryChart = null;
+        let pricesData = {}; 
+        let coinSymbolMap = {};
+        let historicalPrices = {};
+        
+        // Variáveis do Firebase
+        let db;
+        let auth;
+        let userId;
+        let unsubscribePortfolio;
+        let unsubscribeAlerts;
+
+        // Configuração do Firebase (fornecida pelo ambiente)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        async function robustFetch(url, options = {}, retries = 5, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        throw new Error(`Status ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (i === retries - 1) {
+                        throw new Error(`Falha ao buscar de ${url} após ${retries} tentativas.`);
+                    }
+                    await new Promise(res => setTimeout(res, delay * (i + 1)));
+                }
+            }
+        }
+
+        async function fetchPrices() {
+            try {
+                const coinIds = [...new Set(portfolio.map(tx => tx.id).concat(alerts.map(a => a.coinId)))];
+                if (coinIds.length === 0) {
+                    pricesData = {};
+                    updateUI();
+                    return;
+                }
+                const ids = [...new Set(coinIds)].join(',');
+                const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
+                pricesData = await robustFetch(url);
+                updateUI();
+            } catch (error) {
+                console.error("Failed to fetch prices:", error);
+                showNotification('error', 'Erro de Rede', 'Não foi possível buscar os preços atuais.');
+            }
+        }
+
+        async function fetchFearAndGreedIndex() {
+            try {
+                const url = 'https://api.alternative.me/fng/?limit=1';
+                const data = await robustFetch(url);
+                renderFearAndGreedIndex(data.data[0]);
+            } catch (error) {
+                console.error("Failed to fetch Fear & Greed Index:", error);
+            }
+        }
+
+        async function fetchMarketCapData() {
+            const marketCapBody = document.getElementById('market-cap-body');
+            try {
+                const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false`;
+                const data = await robustFetch(url);
+                data.forEach(coin => {
+                    coinSymbolMap[coin.symbol.toLowerCase()] = { id: coin.id, name: coin.name };
+                });
+                renderMarketCapTable(data);
+            } catch (error) {
+                console.error("Failed to fetch market cap data:", error);
+                if (marketCapBody) {
+                    marketCapBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-400">Não foi possível carregar os dados.</td></tr>';
+                }
+            }
+        }
+    
+        async function fetchExchangeRate(date) {
+            if (!date) return null;
+            
+            try {
+                const url = `https://api.frankfurter.app/${date}?from=USD&to=BRL`;
+                const data = await robustFetch(url);
+                if (data.rates && data.rates.BRL) return data.rates.BRL;
+            } catch (error) {
+                console.warn('API Frankfurter falhou, a tentar a API secundária.', error);
+            }
+
+            try {
+                const url = `https://open.er-api.com/v6/latest/USD`;
+                const data = await robustFetch(url);
+                if (data.rates && data.rates.BRL) {
+                    console.log("Cotação obtida da API secundária (mais recente).");
+                    return data.rates.BRL;
+                }
+            } catch (error) {
+                console.error('API secundária também falhou.', error);
+            }
+            
+            try {
+                 const yesterday = new Date(new Date(date).getTime() - 86400000).toISOString().split('T')[0];
+                 const yesterdayUrl = `https://api.frankfurter.app/${yesterday}?from=USD&to=BRL`;
+                 const yesterdayData = await robustFetch(yesterdayUrl);
+                 if (yesterdayData.rates && yesterdayData.rates.BRL) {
+                    console.log("Cotação obtida para o dia anterior.");
+                    return yesterdayData.rates.BRL;
+                 }
+            } catch (error) {
+                console.error('Falha ao obter cotação do dia anterior.', error);
+            }
+
+            return null;
+        }
+
+        async function fetchHistoricalDataForAllAssets() {
+            const uniqueIds = [...new Set(portfolio.map(tx => tx.id))];
+            const failedAssets = [];
+            if (uniqueIds.length === 0) {
+                return;
+            }
+            const todayStr = new Date().toISOString().split('T')[0];
+            for (const id of uniqueIds) {
+                const cacheKey = `history_${id}_${todayStr}`;
+                const cachedData = localStorage.getItem(cacheKey);
+                if (cachedData) {
+                    console.log(`A usar cache para o histórico de ${id}`);
+                    historicalPrices[id] = JSON.parse(cachedData);
+                    continue; 
+                }
+                try {
+                    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=90&interval=daily`;
+                    const data = await robustFetch(url);
+                    if (data && data.prices) {
+                        const mappedPrices = data.prices.map(([timestamp, price]) => ({ timestamp, price }));
+                        historicalPrices[id] = mappedPrices;
+                        localStorage.setItem(cacheKey, JSON.stringify(mappedPrices));
+                    } else {
+                         historicalPrices[id] = [];
+                         failedAssets.push(id.toUpperCase());
+                    }
+                } catch (error) {
+                    console.warn(`CoinGecko falhou para ${id}. A tentar a API secundária (CoinCap).`);
+                    try {
+                        const coincapUrl = `https://api.coincap.io/v2/assets/${id}/history?interval=d1`;
+                        const coincapData = await robustFetch(coincapUrl);
+                        if (coincapData && coincapData.data) {
+                            const mappedPrices = coincapData.data.map(item => ({
+                                timestamp: item.time,
+                                price: parseFloat(item.priceUsd)
+                            }));
+                            historicalPrices[id] = mappedPrices;
+                             localStorage.setItem(cacheKey, JSON.stringify(mappedPrices));
+                        }
+                    } catch (fallbackError) {
+                        console.error(`Falha ao buscar histórico para ${id} em ambas as APIs:`, fallbackError);
+                        historicalPrices[id] = [];
+                        failedAssets.push(id.toUpperCase());
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            if (failedAssets.length > 0) {
+                showNotification('error', 'Falha Parcial', `Não foi possível carregar o histórico de: ${failedAssets.join(', ')}. O gráfico pode estar impreciso.`);
+            }
+        }
+        
+        function formatCurrencyInput(event) {
+            const input = event.target;
+            let value = input.value;
+            let selectionStart = input.selectionStart;
+            const commasBefore = (value.match(/,/g) || []).length;
+            let numericValue = value.replace(/[^0-9.]/g, '');
+            const parts = numericValue.split('.');
+            if (parts.length > 2) {
+                numericValue = parts[0] + '.' + parts.slice(1).join('');
+            }
+            const [integerPart, decimalPart] = numericValue.split('.');
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            let formattedValue = formattedInteger;
+            if (decimalPart !== undefined) {
+                formattedValue += '.' + decimalPart.substring(0, 6);
+            }
+            input.value = formattedValue;
+            const commasAfter = (formattedValue.match(/,/g) || []).length;
+            const commaDifference = commasAfter - commasBefore;
+            selectionStart += commaDifference;
+            if (selectionStart < 0) selectionStart = 0;
+            if (selectionStart > formattedValue.length) selectionStart = formattedValue.length;
+            input.setSelectionRange(selectionStart, selectionStart);
+        }
+
+        function updateUI() {
+            renderPortfolio();
+            renderAllocationChart();
+            updatePerformanceMetrics();
+            checkAlerts();
+            populateAlertCoinSelect();
+        }
+
+        function renderPortfolio() {
+            const portfolioBody = document.getElementById('portfolio-body');
+            const portfolioHeader = document.getElementById('portfolio-header');
+            if (!portfolioBody) return;
+            portfolioBody.innerHTML = '';
+            if (currentPortfolioView === 'aggregated') {
+                renderAggregatedPortfolio(portfolioHeader, portfolioBody);
+            } else {
+                renderDetailedPortfolio(portfolioHeader, portfolioBody);
+            }
+        }
+
+        function renderAggregatedPortfolio(header, body) {
+            header.innerHTML = `<tr><th scope="col" class="px-6 py-3">Ativo</th><th scope="col" class="px-6 py-3">Quantidade Total</th><th scope="col" class="px-6 py-3">Preço Médio Compra</th><th scope="col" class="px-6 py-3">Preço Atual</th><th scope="col" class="px-6 py-3">Resultado ($)</th><th scope="col" class="px-6 py-3 text-center">Auditoria</th></tr>`;
+            const { currentHoldings } = calculateHoldingsAndPL();
+            body.innerHTML = '';
+            if (Object.keys(currentHoldings).length === 0) {
+                body.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-gray-400">Ainda não há transações no seu portfólio.</td></tr>`;
+                return;
+            }
+            Object.values(currentHoldings).forEach(asset => {
+                if (asset.quantity <= 1e-9) return;
+                const currentPrice = pricesData[asset.id]?.usd || 0;
+                const avgPrice = asset.quantity > 0 ? asset.cost / asset.quantity : 0;
+                const pl = (asset.quantity * currentPrice) - asset.cost;
+                const plColor = pl >= 0 ? 'text-green-400' : 'text-red-400';
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-700 hover:bg-gray-800/50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-white">${asset.name}</td>
+                    <td class="px-6 py-4">${asset.quantity.toFixed(6)}</td>
+                    <td class="px-6 py-4">$${avgPrice.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td class="px-6 py-4">$${currentPrice.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td class="px-6 py-4 font-semibold ${plColor}">$${pl.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td class="px-6 py-4 text-center">
+                        <button class="text-indigo-400 hover:text-indigo-300" onclick="showAudit('${asset.id}')" title="Ver auditoria de cálculo">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 7a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm0 4a1 1 0 100 2h2a1 1 0 100-2H7z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </td>`;
+                body.appendChild(row);
+            });
+        }
+
+        function renderDetailedPortfolio(header, body) {
+            header.innerHTML = `<tr><th scope="col" class="px-6 py-3">Tipo</th><th scope="col" class="px-6 py-3">Ativo</th><th scope="col" class="px-6 py-3">Quantidade</th><th scope="col" class="px-6 py-3">Preço Transação</th><th scope="col" class="px-6 py-3">Data</th><th scope="col" class="px-6 py-3">Cotação Dólar</th><th scope="col" class="px-6 py-3">Ações</th></tr>`;
+            if (portfolio.length === 0) {
+                 body.innerHTML = `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-400">Ainda não há transações no seu portfólio.</td></tr>`;
+                return;
+            }
+            portfolio.forEach(tx => {
+                const row = document.createElement('tr');
+                const typeClass = tx.type === 'buy' ? 'text-green-400' : 'text-red-400';
+                const typeDisplay = tx.type === 'buy' ? 'Compra' : 'Venda';
+                const dateObj = new Date(tx.date + 'T00:00:00');
+                const formattedDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(dateObj);
+                row.className = 'border-b border-gray-700 hover:bg-gray-800/50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-bold ${typeClass}">${typeDisplay}</td>
+                    <td class="px-6 py-4 font-medium text-white">${tx.name}</td>
+                    <td class="px-6 py-4">${tx.quantity}</td>
+                    <td class="px-6 py-4">$${tx.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td class="px-6 py-4">${formattedDate}</td>
+                    <td class="px-6 py-4">R$ ${tx.usdToBrlRate ? tx.usdToBrlRate.toFixed(4) : 'N/A'}</td>
+                    <td class="px-6 py-4">
+                        <button class="text-red-400 hover:text-red-300 font-semibold" onclick="removeTransaction('${tx.docId}')">Remover</button>
+                    </td>`;
+                body.appendChild(row);
+            });
+        }
+        function renderAllocationChart() { 
+            const series = [];
+            const labels = [];
+            const { currentHoldings } = calculateHoldingsAndPL();
+            let totalValue = 0;
+            Object.values(currentHoldings).forEach(asset => {
+                const value = asset.quantity * (pricesData[asset.id]?.usd || 0);
+                if (value > 0) {
+                    series.push(value);
+                    labels.push(asset.name);
+                    totalValue += value;
+                }
+            });
+            const options = {
+                series: series.length > 0 ? series : [100],
+                labels: labels.length > 0 ? labels : ['Vazio'],
+                chart: { type: 'donut', height: 250, background: 'transparent' },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '75%',
+                            labels: {
+                                show: true,
+                                total: {
+                                    show: true,
+                                    label: 'Total',
+                                    color: '#fff',
+                                    fontSize: '16px',
+                                    formatter: () => `$${totalValue.toLocaleString('en-US',{maximumFractionDigits:0})}`
+                                },
+                                value: {
+                                    show: true,
+                                    color: '#cbd5e1',
+                                    fontSize: '14px',
+                                    formatter: (val, opts) => {
+                                        if (opts && opts.w && opts.w.globals && opts.w.globals.seriesTotals) {
+                                            const total = opts.w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                            if (total === 0) return '0%';
+                                            return `${(parseFloat(val) / total * 100).toFixed(1)}%`;
+                                        }
+                                        return '';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                dataLabels: { enabled: false },
+                legend: { show: false },
+                tooltip: { y: { formatter: (val) => labels.length > 0 ? `$${val.toLocaleString('en-US',{maximumFractionDigits:2})}` : "N/A" } },
+                theme: { mode: 'dark' }
+            };
+            const chartEl = document.querySelector("#allocation-chart");
+            if (chartEl) {
+                if (allocationChart) {
+                    allocationChart.updateOptions(options);
+                } else {
+                    allocationChart = new ApexCharts(chartEl, options);
+                    allocationChart.render();
+                }
+            }
+        }
+
+        function calculateHoldingsAndPL() {
+            let realizedPLByAsset = {};
+            let currentHoldings = {};
+            const sortedPortfolio = [...portfolio].sort((a, b) => new Date(a.date) - new Date(b.date));
+            sortedPortfolio.forEach(tx => {
+                if (!currentHoldings[tx.id]) {
+                    currentHoldings[tx.id] = { quantity: 0, cost: 0, name: tx.name, id: tx.id };
+                }
+                if (!realizedPLByAsset[tx.id]) {
+                    realizedPLByAsset[tx.id] = { name: tx.name, realizedPL: 0 };
+                }
+                if (tx.type === 'buy') {
+                    currentHoldings[tx.id].quantity += tx.quantity;
+                    currentHoldings[tx.id].cost += tx.quantity * tx.price;
+                } else if (tx.type === 'sell') {
+                    const avgCost = currentHoldings[tx.id].quantity > 0 ? currentHoldings[tx.id].cost / currentHoldings[tx.id].quantity : 0;
+                    const costOfSold = tx.quantity * avgCost;
+                    realizedPLByAsset[tx.id].realizedPL += (tx.quantity * tx.price) - costOfSold;
+                    currentHoldings[tx.id].quantity -= tx.quantity;
+                    currentHoldings[tx.id].cost -= costOfSold;
+                }
+            });
+            return { currentHoldings, realizedPLByAsset };
+        }
+
+        function updatePerformanceMetrics() {
+            const totalPlEl = document.getElementById('total-pl');
+            const bestAssetEl = document.getElementById('best-asset');
+            const worstAssetEl = document.getElementById('worst-asset');
+            const volatilityEl = document.getElementById('portfolio-volatility');
+            if (!totalPlEl) return;
+            const { currentHoldings, realizedPLByAsset } = calculateHoldingsAndPL();
+            let totalUnrealizedPL = 0;
+            let assetsPerformance = [];
+            let totalPortfolioValueForVolatility = 0;
+            Object.values(currentHoldings).forEach(h => {
+                if (h.quantity > 1e-9) {
+                    const currentPrice = pricesData[h.id]?.usd || 0;
+                    const currentValue = h.quantity * currentPrice;
+                    const unrealizedPL = currentValue - h.cost;
+                    totalUnrealizedPL += unrealizedPL;
+                    assetsPerformance.push({ name: h.name, pl: unrealizedPL });
+                    totalPortfolioValueForVolatility += currentValue;
+                }
+            });
+            const totalRealizedPL = Object.values(realizedPLByAsset).reduce((sum, asset) => sum + asset.realizedPL, 0);
+            const totalPL = totalRealizedPL + totalUnrealizedPL;
+            totalPlEl.textContent = `$${totalPL.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+            totalPlEl.className = totalPL >= 0 ? 'font-semibold text-green-400' : 'font-semibold text-red-400';
+            if (assetsPerformance.length > 0) {
+                assetsPerformance.sort((a, b) => b.pl - a.pl);
+                bestAssetEl.textContent = assetsPerformance[0].name;
+                worstAssetEl.textContent = assetsPerformance[assetsPerformance.length - 1].name;
+            } else {
+                bestAssetEl.textContent = '-';
+                worstAssetEl.textContent = '-';
+            }
+            let weightedVolatility = 0;
+            Object.values(currentHoldings).forEach(h => {
+                if (h.quantity > 1e-9) {
+                    const priceInfo = pricesData[h.id];
+                    if (priceInfo) {
+                        const currentValue = h.quantity * priceInfo.usd;
+                        const assetWeight = totalPortfolioValueForVolatility > 0 ? currentValue / totalPortfolioValueForVolatility : 0;
+                        const assetVolatility = priceInfo.usd_24h_change || 0;
+                        if (!isNaN(assetVolatility) && !isNaN(assetWeight)) {
+                            weightedVolatility += assetVolatility * assetWeight;
+                        }
+                    }
+                }
+            });
+            volatilityEl.textContent = `${weightedVolatility.toFixed(2)}%`;
+            renderRealizedPLTable(realizedPLByAsset);
+        }
+
+        function renderRealizedPLTable(realizedPLByAsset) {
+            const realizedPlBody = document.getElementById('realized-pl-body');
+            if (!realizedPlBody) return;
+            realizedPlBody.innerHTML = '';
+            const assetsWithRealizedPL = Object.values(realizedPLByAsset).filter(asset => Math.abs(asset.realizedPL) > 1e-9);
+            if (assetsWithRealizedPL.length === 0) {
+                realizedPlBody.innerHTML = '<tr><td colspan="2" class="px-6 py-4 text-center text-gray-400">Nenhuma posição fechada ainda.</td></tr>';
+                return;
+            }
+            assetsWithRealizedPL.forEach(asset => {
+                const plColor = asset.realizedPL >= 0 ? 'text-green-400' : 'text-red-400';
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-700';
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-white">${asset.name}</td>
+                    <td class="px-6 py-4 font-semibold ${plColor}">$${asset.realizedPL.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+                realizedPlBody.appendChild(row);
+            });
+        }
+
+        function renderFearAndGreedIndex(data) {
+            const chartEl = document.querySelector("#sentiment-gauge-chart");
+            if (!chartEl) return;
+            const value = parseInt(data.value, 10);
+            const classification = data.value_classification;
+            let startColor, endColor;
+            if (value <= 25) { startColor = '#ef4444'; endColor = '#f97316'; } 
+            else if (value <= 45) { startColor = '#f97316'; endColor = '#eab308'; } 
+            else if (value <= 55) { startColor = '#eab308'; endColor = '#a3e635'; } 
+            else if (value <= 75) { startColor = '#84cc16'; endColor = '#22c55e'; } 
+            else { startColor = '#22c55e'; endColor = '#10b981'; }
+            const options = { series: [value], chart: { type: 'radialBar', height: 250, sparkline: { enabled: true } }, plotOptions: { radialBar: { startAngle: -90, endAngle: 90, hollow: { margin: 5, size: '60%' }, track: { background: 'rgba(255, 255, 255, 0.1)' }, dataLabels: { name: { show: true, offsetY: 30, color: '#9ca3af', fontSize: '14px', formatter: () => classification }, value: { show: true, offsetY: -15, fontSize: '36px', color: '#ffffff', fontWeight: 'bold' } } } }, fill: { type: 'gradient', gradient: { shade: 'dark', type: 'horizontal', shadeIntensity: 0.5, gradientToColors: [endColor], inverseColors: false, opacityFrom: 1, opacityTo: 1, stops: [0, 100] } }, colors: [startColor], stroke: { dashArray: 4 }, labels: [classification] };
+            if (sentimentGaugeChart) {
+                sentimentGaugeChart.updateOptions(options);
+            } else {
+                sentimentGaugeChart = new ApexCharts(chartEl, options);
+                sentimentGaugeChart.render();
+            }
+        }
+
+        function renderMarketCapTable(data) {
+            const marketCapBody = document.getElementById('market-cap-body');
+            if (!marketCapBody) return;
+            marketCapBody.innerHTML = '';
+            data.forEach(coin => {
+                const priceChange = coin.price_change_percentage_24h;
+                const priceChangeColor = priceChange >= 0 ? 'text-green-400' : 'text-red-400';
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-700 hover:bg-gray-800/50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-white">${coin.market_cap_rank}</td>
+                    <td class="px-6 py-4 font-medium text-white flex items-center">
+                        <img src="${coin.image}" alt="${coin.name}" class="w-6 h-6 mr-3 rounded-full">${coin.name} 
+                        <span class="text-gray-400 ml-2">${coin.symbol.toUpperCase()}</span>
+                    </td>
+                    <td class="px-6 py-4">$${coin.current_price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:6})}</td>
+                    <td class="px-6 py-4">$${coin.market_cap.toLocaleString('en-US')}</td>
+                    <td class="px-6 py-4 font-semibold ${priceChangeColor}">${priceChange ? priceChange.toFixed(2) : '0.00'}%</td>
+                    <td class="px-6 py-4 text-center">
+                        <a href="https://www.binance.com/pt-br/trade/${coin.symbol.toUpperCase()}_USDT?type=spot" target="_blank" rel="noopener noreferrer" title="Ver gráfico na Binance">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto text-indigo-400 hover:text-indigo-300" viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
+                        </a>
+                    </td>`;
+                marketCapBody.appendChild(row);
+            });
+        }
+
+        function generateTaxReport() {
+            const reportMonthInput = document.getElementById('report-month');
+            const reportOutput = document.getElementById('report-output');
+            const monthYear = reportMonthInput.value;
+            if (!monthYear) {
+                reportOutput.innerHTML = `<p class="text-yellow-400">Por favor, selecione um mês e ano.</p>`;
+                return;
+            }
+            const [year, month] = monthYear.split('-');
+            const salesInMonth = portfolio.filter(tx => {
+                const txDate = new Date(tx.date);
+                return tx.type === 'sell' && txDate.getFullYear() == year && (txDate.getMonth() + 1) == month;
+            });
+            if (salesInMonth.length === 0) {
+                reportOutput.innerHTML = `<p>Nenhuma venda registada para ${month}/${year}.</p>`;
+                return;
+            }
+            let totalSaleValue = 0;
+            let totalProfit = 0;
+            salesInMonth.forEach(sale => {
+                totalSaleValue += sale.quantity * sale.price;
+                const purchasesBeforeSale = portfolio.filter(p => p.type === 'buy' && p.id === sale.id && new Date(p.date) <= new Date(sale.date));
+                const totalQuantityBought = purchasesBeforeSale.reduce((sum, p) => sum + p.quantity, 0);
+                const totalCost = purchasesBeforeSale.reduce((sum, p) => sum + p.quantity * p.price, 0);
+                const avgCost = totalQuantityBought > 0 ? totalCost / totalQuantityBought : 0;
+                const saleCost = avgCost * sale.quantity;
+                totalProfit += (sale.quantity * sale.price) - saleCost;
+            });
+            const dollarRate = 5.20;
+            const totalSaleInBRL = totalSaleValue * dollarRate;
+            const isExempt = totalSaleInBRL < 35000;
+            const taxDue = isExempt || totalProfit <= 0 ? 0 : totalProfit * dollarRate * 0.15;
+            reportOutput.innerHTML = `
+                <h4 class="font-bold">Relatório para ${month}/${year}</h4>
+                <p>Total de Vendas (USD): <span class="font-semibold">$${totalSaleValue.toLocaleString('en-US',{maximumFractionDigits:2})}</span></p>
+                <p>Total de Vendas (BRL aprox.): <span class="font-semibold">R$${totalSaleInBRL.toLocaleString('pt-BR',{maximumFractionDigits:2})}</span></p>
+                <p>Lucro/Prejuízo (USD): <span class="font-semibold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}">$${totalProfit.toLocaleString('en-US',{maximumFractionDigits:2})}</span></p>
+                <p>Regra de Isenção (R$35.000): <span class="font-semibold ${isExempt ? 'text-green-400' : 'text-yellow-400'}">${isExempt ? 'Aplicável' : 'Não Aplicável'}</span></p>
+                <p class="text-lg">Imposto Devido (BRL aprox.): <span class="font-bold text-white">R$${taxDue.toLocaleString('pt-BR',{maximumFractionDigits:2})}</span></p>`;
+        }
+
+        function populateAlertCoinSelect() {
+            const alertCoinSelect = document.getElementById('alert-coin-select');
+            if (!alertCoinSelect) return;
+            const { currentHoldings } = calculateHoldingsAndPL();
+            const coinIds = [...new Set(Object.keys(currentHoldings))];
+            alertCoinSelect.innerHTML = coinIds.map(id => `<option value="${id}">${currentHoldings[id].name}</option>`).join('');
+        }
+
+        function checkAlerts() {
+            if (alerts.length === 0) return;
+            alerts.forEach(async alert => {
+                if (alert.isTriggered) return;
+                const priceInfo = pricesData[alert.coinId];
+                if (priceInfo) {
+                    const currentPrice = priceInfo.usd;
+                    let triggered = false;
+                    if (alert.condition === 'above' && currentPrice > alert.price) {
+                        triggered = true;
+                    } else if (alert.condition === 'below' && currentPrice < alert.price) {
+                        triggered = true;
+                    }
+                    if (triggered) {
+                        alert.isTriggered = true;
+                        const coinName = (coinSymbolMap[alert.coinId] || {name: alert.coinId.toUpperCase()}).name;
+                        showNotification('alert', 'Alerta de Preço!', `${coinName} atingiu seu alvo de $${alert.price.toLocaleString()}.`);
+                        await updateAlertInFirestore(alert);
+                        renderActiveAlerts();
+                    }
+                }
+            });
+        }
+
+        function renderActiveAlerts() {
+            const activeAlertsContainer = document.getElementById('active-alerts');
+            if (!activeAlertsContainer) return;
+            activeAlertsContainer.innerHTML = alerts.map(alert => {
+                let triggeredClass = 'bg-black/20';
+                if (alert.isTriggered) {
+                    triggeredClass = alert.condition === 'above' ? 'alert-triggered-above' : 'alert-triggered-below';
+                }
+                const coinName = (coinSymbolMap[alert.coinId] || {name: alert.coinId.toUpperCase()}).name;
+                const conditionSymbol = alert.condition === 'above' ? '>' : '<';
+                return `
+                    <li class="flex justify-between items-center p-2 rounded-md transition-colors duration-300 ${triggeredClass}">
+                        <span>${coinName} ${conditionSymbol} <span class="font-bold">$${alert.price.toLocaleString()}</span></span>
+                        <button onclick="removeAlert('${alert.docId}')" class="text-gray-400 hover:text-white">&times;</button>
+                    </li>`;
+            }).join('');
+        }
+
+        async function renderPortfolioHistoryChart() {
+            const chartEl = document.getElementById('portfolio-history-chart');
+            const placeholder = document.getElementById('load-chart-placeholder');
+            const loadBtn = document.getElementById('load-history-chart-btn');
+            if (!chartEl || !placeholder || !loadBtn) return;
+            loadBtn.disabled = true;
+            loadBtn.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                A Carregar...`;
+            loadBtn.classList.add('opacity-50', 'cursor-not-allowed', 'flex', 'items-center', 'justify-center');
+            placeholder.querySelector('p').textContent = 'A buscar dados históricos. Isto pode demorar um pouco...';
+            
+            await fetchHistoricalDataForAllAssets();
+            
+            const hasData = Object.values(historicalPrices).some(prices => prices && prices.length > 0);
+            
+            if (portfolio.length === 0 || !hasData) {
+                placeholder.querySelector('p').textContent = 'Não foi possível carregar o histórico. Tente novamente.';
+                loadBtn.disabled = false;
+                loadBtn.innerHTML = `Tentar Novamente`;
+                loadBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'flex', 'items-center', 'justify-center');
+                return;
+            }
+            placeholder.classList.add('hidden');
+            const sortedTxs = [...portfolio].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const chartData = [];
+            const today = new Date();
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(today.getDate() - 90);
+            let earliestTxDate = sortedTxs.length > 0 ? new Date(sortedTxs[0].date) : ninetyDaysAgo;
+            let startDate = earliestTxDate > ninetyDaysAgo ? earliestTxDate : ninetyDaysAgo;
+            startDate.setHours(0, 0, 0, 0);
+            for (let d = new Date(startDate); d <= today; d.setDate(d.getDate() + 1)) {
+                let dailyTotalValue = 0;
+                let dailyHoldings = {};
+                const txsUpToDate = sortedTxs.filter(tx => new Date(tx.date) <= d);
+                txsUpToDate.forEach(tx => {
+                    if (!dailyHoldings[tx.id]) {
+                        dailyHoldings[tx.id] = { quantity: 0 };
+                    }
+                    if (tx.type === 'buy') {
+                        dailyHoldings[tx.id].quantity += tx.quantity;
+                    } else {
+                        dailyHoldings[tx.id].quantity -= tx.quantity;
+                    }
+                });
+                for (const id in dailyHoldings) {
+                    const assetHistory = historicalPrices[id];
+                    if (assetHistory) {
+                        const pricePoint = assetHistory.find(p => new Date(p.timestamp).setHours(0, 0, 0, 0) === d.getTime());
+                        if (pricePoint) {
+                            dailyTotalValue += dailyHoldings[id].quantity * pricePoint.price;
+                        }
+                    }
+                }
+                if (dailyTotalValue > 0) {
+                    chartData.push({ x: d.getTime(), y: dailyTotalValue });
+                }
+            }
+            const options = { series: [{ name: 'Valor do Portfólio', data: chartData.map(d => [d.x, d.y]) }], chart: { type: 'area', height: 350, background: 'transparent', toolbar: { show: false }, zoom: { enabled: false } }, dataLabels: { enabled: false }, stroke: { curve: 'smooth', width: 2 }, xaxis: { type: 'datetime', labels: { style: { colors: '#9ca3af' } } }, yaxis: { labels: { style: { colors: '#9ca3af' }, formatter: (val) => `$${val.toLocaleString('en-US', { maximumFractionDigits: 0 })}` } }, tooltip: { theme: 'dark', x: { format: 'dd MMM yyyy' }, y: { formatter: (val) => `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` } }, fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.2, stops: [0, 90, 100] } }, grid: { borderColor: 'rgba(255, 255, 255, 0.1)', yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } } }, theme: { mode: 'dark' } };
+            if (portfolioHistoryChart) {
+                portfolioHistoryChart.updateOptions(options);
+            } else {
+                portfolioHistoryChart = new ApexCharts(chartEl, options);
+                portfolioHistoryChart.render();
+            }
+        }
+
+        function showNotification(type, title, message, autoClose = false) {
+            if (autoClose) {
+                const toastContainer = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                toast.className = 'toast glass-card p-4 rounded-lg shadow-lg flex items-center';
+                const icons = {
+                    success: `<svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`,
+                    error: `<svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+                };
+                toast.innerHTML = `<div class="mr-3">${icons[type] || icons['success']}</div><div><p class="font-bold text-white">${title}</p><p class="text-sm text-gray-300">${message}</p></div>`;
+                toastContainer.appendChild(toast);
+                setTimeout(() => { toast.classList.add('show'); }, 100);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 500);
+                }, 3000);
+            } else {
+                const modal = document.getElementById('notification-modal');
+                const modalIcon = document.getElementById('modal-icon');
+                const modalTitle = document.getElementById('modal-title');
+                const modalMessage = document.getElementById('modal-message');
+                const icons = {
+                    error: `<svg class="w-12 h-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`,
+                    alert: `<svg class="w-12 h-12 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>`,
+                };
+                modalIcon.innerHTML = icons[type] || '';
+                modalTitle.textContent = title;
+                modalMessage.textContent = message;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
+
+        function showAudit(assetId) {
+            const modal = document.getElementById('audit-modal');
+            const modalTitle = document.getElementById('audit-modal-title');
+            const modalContent = document.getElementById('audit-modal-content');
+            const assetTxs = portfolio.filter(tx => tx.id === assetId).sort((a, b) => new Date(a.date) - new Date(b.date));
+            if (assetTxs.length === 0) return;
+            modalTitle.textContent = `Auditoria de Cálculo: ${assetTxs[0].name}`;
+            let totalQuantity = 0;
+            let totalCost = 0;
+            let realizedPL = 0;
+            let auditLog = '<div class="space-y-4">';
+            assetTxs.forEach(tx => {
+                if (tx.type === 'buy') {
+                    totalQuantity += tx.quantity;
+                    totalCost += tx.quantity * tx.price;
+                    auditLog += `
+                        <div class="p-3 bg-black/20 rounded-md border-l-4 border-green-500">
+                            <p><strong>Compra:</strong> ${tx.quantity} @ $${tx.price.toLocaleString()}</p>
+                            <p class="text-xs text-gray-400">Custo Total da Compra: $${(tx.quantity * tx.price).toLocaleString()}</p>
+                            <p class="text-xs text-gray-400">Novo Saldo: ${totalQuantity.toFixed(6)}, Custo Total Acumulado: $${totalCost.toLocaleString()}</p>
+                        </div>`;
+                } else {
+                    const avgCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+                    const costOfSold = avgCost * tx.quantity;
+                    const salePL = (tx.quantity * tx.price) - costOfSold;
+                    realizedPL += salePL;
+                    totalQuantity -= tx.quantity;
+                    totalCost -= costOfSold;
+                    if (totalCost < 0) totalCost = 0;
+                    auditLog += `
+                        <div class="p-3 bg-black/20 rounded-md border-l-4 border-red-500">
+                            <p><strong>Venda:</strong> ${tx.quantity} @ $${tx.price.toLocaleString()}</p>
+                            <p class="text-xs text-gray-400">Custo Médio da Venda: $${avgCost.toLocaleString()}</p>
+                            <p class="text-xs text-gray-400">Resultado da Venda: <span class="${salePL >= 0 ? 'text-green-400' : 'text-red-400'}">$${salePL.toLocaleString()}</span></p>
+                            <p class="text-xs text-gray-400">Novo Saldo: ${totalQuantity.toFixed(6)}, Custo Restante: $${totalCost.toLocaleString()}</p>
+                        </div>`;
+                }
+            });
+            const currentPrice = pricesData[assetId]?.usd || 0;
+            const currentValue = totalQuantity * currentPrice;
+            const unrealizedPL = totalQuantity > 1e-9 ? currentValue - totalCost : 0;
+            const totalPL = realizedPL + unrealizedPL;
+            auditLog += `
+                <div class="mt-6 pt-4 border-t border-gray-700">
+                    <h4 class="font-bold text-white mb-2">Resumo Final</h4>
+                    <p>Resultado Realizado (Vendas): <span class="${realizedPL >= 0 ? 'text-green-400' : 'text-red-400'}">$${realizedPL.toLocaleString()}</span></p>
+                    <p>Resultado Não Realizado (Posição Atual): <span class="${unrealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}">$${unrealizedPL.toLocaleString()}</span></p>
+                    <p class="font-bold text-lg mt-2">Resultado Total: <span class="${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}">$${totalPL.toLocaleString()}</span></p>
+                </div>
+            </div>`;
+            modalContent.innerHTML = auditLog;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function generatePDFReport() {
+            const startDate = document.getElementById('pdf-start-date').value;
+            const endDate = document.getElementById('pdf-end-date').value;
+            if (!startDate || !endDate) {
+                showNotification('error', 'Erro', 'Por favor, selecione a data inicial e final.');
+                return;
+            }
+            const startDateObj = new Date(startDate + 'T00:00:00');
+            const endDateObj = new Date(endDate + 'T23:59:59');
+            const filteredTxs = portfolio.filter(tx => {
+                const txDate = new Date(tx.date + 'T00:00:00');
+                return txDate >= startDateObj && txDate <= endDateObj;
+            }).sort((a, b) => new Date(a.date) - new Date(b.date));
+            if (filteredTxs.length === 0) {
+                showNotification('alert', 'Aviso', 'Nenhuma transação encontrada no período selecionado.');
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const formattedStartDate = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(startDateObj);
+            const formattedEndDate = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(endDateObj);
+            doc.setFontSize(18);
+            doc.text('Relatório de Operações de Criptoativos', 14, 22);
+            doc.setFontSize(11);
+            doc.text(`Período: ${formattedStartDate} a ${formattedEndDate}`, 14, 30);
+            const head = [['Data', 'Tipo', 'Ativo', 'Qtd.', 'Preço (USD)', 'Total (USD)']];
+            const body = filteredTxs.map(tx => {
+                const typeDisplay = tx.type === 'buy' ? 'Compra' : 'Venda';
+                const total = tx.quantity * tx.price;
+                const dateObj = new Date(tx.date + 'T00:00:00');
+                const formattedDate = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(dateObj);
+                return [
+                    formattedDate,
+                    typeDisplay,
+                    tx.name,
+                    tx.quantity.toFixed(6),
+                    `$${tx.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    `$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                ];
+            });
+            doc.autoTable({ head, body, startY: 35, theme: 'striped', headStyles: { fillColor: [79, 70, 229] }, });
+            let totalBoughtUSD = 0;
+            let totalSoldUSD = 0;
+            filteredTxs.forEach(tx => {
+                const total = tx.quantity * tx.price;
+                if (tx.type === 'buy') {
+                    totalBoughtUSD += total;
+                } else {
+                    totalSoldUSD += total;
+                }
+            });
+            const finalY = doc.lastAutoTable.finalY;
+            doc.setFontSize(12);
+            doc.text('Resumo do Período:', 14, finalY + 15);
+            doc.setFontSize(10);
+            doc.text(`Total Comprado (USD): $${totalBoughtUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 14, finalY + 22);
+            doc.text(`Total Vendido (USD): $${totalSoldUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 14, finalY + 29);
+            
+            doc.save(`relatorio_operacoes_${startDate}_a_${endDate}.pdf`);
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('add-transaction-form').addEventListener('submit', handleAddTransaction);
+            document.getElementById('price').addEventListener('input', formatCurrencyInput);
+            document.getElementById('alert-price').addEventListener('input', formatCurrencyInput);
+            document.getElementById('view-agg-btn').addEventListener('click', () => {
+                currentPortfolioView = 'aggregated';
+                document.getElementById('view-agg-btn').classList.replace('btn-secondary', 'btn-primary');
+                document.getElementById('view-det-btn').classList.replace('btn-primary', 'btn-secondary');
+                renderPortfolio();
+            });
+            document.getElementById('view-det-btn').addEventListener('click', () => {
+                currentPortfolioView = 'detailed';
+                document.getElementById('view-det-btn').classList.replace('btn-secondary', 'btn-primary');
+                document.getElementById('view-agg-btn').classList.replace('btn-primary', 'btn-secondary');
+                renderPortfolio();
+            });
+            document.getElementById('generate-report-btn').addEventListener('click', generateTaxReport);
+            document.getElementById('alert-form').addEventListener('submit', handleAddAlert);
+            document.getElementById('load-history-chart-btn').addEventListener('click', renderPortfolioHistoryChart);
+            document.getElementById('modal-close-btn').addEventListener('click', () => {
+                document.getElementById('notification-modal').classList.add('hidden');
+                document.getElementById('notification-modal').classList.remove('flex');
+            });
+            document.getElementById('audit-modal-close-btn').addEventListener('click', () => {
+                document.getElementById('audit-modal').classList.add('hidden');
+                document.getElementById('audit-modal').classList.remove('flex');
+            });
+            document.getElementById('generate-pdf-btn').addEventListener('click', generatePDFReport);
+        }
+
+        async function handleAddTransaction(e) {
+            e.preventDefault();
+            const submitButton = document.getElementById('add-tx-btn');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Aguarde...';
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+            try {
+                const type = document.getElementById('transaction-type').value;
+                const userInput = document.getElementById('coin-id').value.toLowerCase().trim();
+                const quantity = parseFloat(document.getElementById('quantity').value);
+                const priceString = document.getElementById('price').value;
+                const price = parseFloat(priceString.replace(/,/g, ''));
+                const date = document.getElementById('date').value;
+                const usdToBrlRate = await fetchExchangeRate(date); 
+                let id = userInput;
+                let name = userInput.charAt(0).toUpperCase() + userInput.slice(1);
+                const mappedCoin = Object.values(coinSymbolMap).find(c => c.id === userInput) || coinSymbolMap[userInput];
+                if (mappedCoin) {
+                    id = mappedCoin.id;
+                    name = mappedCoin.name;
+                }
+                if (id && quantity > 0 && price > 0 && date && usdToBrlRate && usdToBrlRate > 0) {
+                    if (type === 'sell') {
+                        const { currentHoldings } = calculateHoldingsAndPL();
+                        const assetHolding = currentHoldings[id] ? currentHoldings[id].quantity : 0;
+                        if (quantity > assetHolding + 1e-9) { 
+                            showNotification('error', 'Erro de Validação', `Saldo insuficiente. Você possui apenas ${assetHolding.toFixed(6)} de ${name}.`); 
+                            return; 
+                        }
+                    }
+                    const newTransaction = { type, id, name, quantity, price, date, usdToBrlRate, userId };
+                    await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/portfolio`), newTransaction);
+                    document.getElementById('add-transaction-form').reset();
+                    document.getElementById('date').value = new Date().toISOString().split('T')[0];
+                    showNotification('success', 'Sucesso!', 'Transação adicionada à nuvem.', true);
+                } else {
+                    showNotification('error', 'Erro', 'Verifique os campos ou a data. Não foi possível obter a cotação do dólar.');
+                }
+            } catch (error) {
+                console.error("Erro ao adicionar transação:", error);
+                showNotification('error', 'Erro de Base de Dados', 'Não foi possível guardar a transação.');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Adicionar';
+                submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        async function removeTransaction(docId) {
+            if (!docId) return;
+            await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/portfolio`, docId));
+        }
+        
+        async function handleAddAlert(e) {
+            e.preventDefault();
+            const coinId = document.getElementById('alert-coin-select').value;
+            const condition = document.getElementById('alert-condition').value;
+            const alertPriceString = document.getElementById('alert-price').value;
+            const price = parseFloat(alertPriceString.replace(/,/g, ''));
+            if (coinId && price > 0) {
+                const newAlert = { coinId, condition, price, isTriggered: false, userId };
+                await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/alerts`), newAlert);
+                document.getElementById('alert-form').reset();
+                showNotification('success', 'Alerta Criado', 'Guardado na nuvem.', true);
+            } else {
+                showNotification('error', 'Erro', 'Selecione um ativo e um preço válido.');
+            }
+        }
+
+        async function removeAlert(docId) {
+            if (!docId) return;
+            await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/alerts`, docId));
+        }
+
+        async function updateAlertInFirestore(alert) {
+            const alertRef = doc(db, `/artifacts/${appId}/users/${userId}/alerts`, alert.docId);
+            await setDoc(alertRef, { isTriggered: true }, { merge: true });
+        }
+
+        async function seedInitialData() {
+            console.log("Utilizador novo ou sem dados. A adicionar dados de exemplo à nuvem...");
+            const samplePortfolio = [
+                { type: 'buy', id: 'bitcoin', name: 'Bitcoin', quantity: 0.5, price: 68000, date: '2025-08-20', usdToBrlRate: 5.25 },
+                { type: 'buy', id: 'ethereum', name: 'Ethereum', quantity: 10, price: 3500, date: '2025-08-22', usdToBrlRate: 5.28 },
+                { type: 'buy', id: 'solana', name: 'Solana', quantity: 50, price: 150, date: '2025-08-25', usdToBrlRate: 5.30 },
+                { type: 'sell', id: 'solana', name: 'Solana', quantity: 20, price: 180, date: '2025-08-26', usdToBrlRate: 5.31 }
+            ];
+            const portfolioCollection = collection(db, `/artifacts/${appId}/users/${userId}/portfolio`);
+            for (const tx of samplePortfolio) {
+                const txWithUser = { ...tx, userId };
+                await addDoc(portfolioCollection, txWithUser);
+            }
+            showNotification('success', 'Bem-vindo!', 'Adicionámos alguns dados de exemplo para começar.', true);
+        }
+
+        async function refreshCoinGeckoData() {
+            await fetchPrices();
+            await fetchMarketCapData();
+        }
+
+        // INICIALIZAÇÃO
+        window.showAudit = showAudit;
+        window.removeTransaction = removeTransaction;
+        window.removeAlert = removeAlert;
+    
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('user-id-display').textContent = userId;
+                        listenToDataChanges();
+                        initializeAppUI();
+                    }
+                });
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Falha na autenticação ou inicialização:", error);
+                document.getElementById('loading-screen').innerHTML = '<p class="text-red-400">Falha crítica na inicialização. Por favor, recarregue a página.</p>';
+            }
+        });
+        
+        let portfolioDebounceTimer;
+        function listenToDataChanges() {
+            if (unsubscribePortfolio) unsubscribePortfolio();
+            const portfolioCollection = collection(db, `/artifacts/${appId}/users/${userId}/portfolio`);
+            let isFirstPortfolioSnapshot = true;
+            unsubscribePortfolio = onSnapshot(portfolioCollection, (snapshot) => {
+                clearTimeout(portfolioDebounceTimer);
+                portfolioDebounceTimer = setTimeout(async () => {
+                    try {
+                        const isNewUser = snapshot.empty && isFirstPortfolioSnapshot;
+                        isFirstPortfolioSnapshot = false;
+                        if (isNewUser) {
+                            await seedInitialData();
+                            return; 
+                        }
+                        portfolio = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+                        await refreshCoinGeckoData();
+                    } catch (error) {
+                        console.error("Erro crítico ao processar dados do Firestore:", error);
+                        showNotification('error', 'Erro Crítico', 'Falha ao processar dados da nuvem.');
+                    }
+                }, 500);
+            });
+            if (unsubscribeAlerts) unsubscribeAlerts();
+            const alertsCollection = collection(db, `/artifacts/${appId}/users/${userId}/alerts`);
+            unsubscribeAlerts = onSnapshot(alertsCollection, (snapshot) => {
+                alerts = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+                renderActiveAlerts();
+            });
+        }
+        
+        function initializeAppUI() {
+            try {
+                setupEventListeners();
+                fetchFearAndGreedIndex();
+                setInterval(fetchPrices, 60000);
+                setInterval(fetchMarketCapData, 300000);
+                setInterval(checkAlerts, 15000);
+                document.getElementById('date').value = new Date().toISOString().split('T')[0];
+                const loadingScreen = document.getElementById('loading-screen');
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => {
+                    loadingScreen.classList.add('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                }, 500);
+            } catch (error) {
+                console.error("Erro fatal ao inicializar a UI:", error);
+                document.body.innerHTML = `<div class="fixed inset-0 bg-slate-900 flex items-center justify-center text-center p-8"><p class="text-red-400 text-lg">Ocorreu um erro fatal ao carregar o dashboard.<br>Por favor, recarregue a página.<br><br><span class="text-sm text-gray-500">Detalhe: ${error.message}</span></p></div>`;
+            }
+        }
+    </script>
+</body>
+</html>
+
